@@ -1,0 +1,596 @@
+---
+title: "Session 1"
+author: "Leyao Jin (leyao.jin01@estudiant.upf.edu)"
+date: "Last update: `r format(Sys.time(), '%d %B, %Y')`"      
+output:
+  html_document:
+    toc: true
+    fig_caption: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Analysis of the Heart Disease Dataset 
+Load the data from
+[here](https://raw.githubusercontent.com/jpinero/DMI_2021/main/datasets/heart_disease_dataset.csv), and the description is [here](https://raw.githubusercontent.com/jpinero/DMI_2021/main/datasets/heart_disease_description.txt). 
+The original dataset comes from [here](https://archive.ics.uci.edu/ml/datasets/Heart+Disease) and corresponds to the [processed cleveland data](https://archive.ics.uci.edu/ml/machine-learning-databases/heart-disease/processed.cleveland.data)
+
+## Perform an EDA on the dataset
+
+```{r}
+
+data<-read.csv(file = "heart_disease_dataset.csv", header = T, sep=" ", na.strings = c("NA", " ", "-999", "NULL","?"))
+```
+
+
+```{r}
+str(data)
+head(data)
+summary(data)
+```
+
+
+```{r}
+data <- data %>%
+  mutate(
+    sex = ifelse(sex == 1, "Male", "Female"),
+    fbs = ifelse(fbs == 1, "True", "False"),
+    exang = ifelse(exang == 1, "Yes", "No"),
+    cp = factor(cp, levels = c(1, 2, 3, 4), labels = c("Typical Angina", "Atypical Angina", "Non-Anginal Pain", "Asymptomatic")),
+    restecg = factor(restecg, levels = c(0, 1, 2), labels = c("Normal", "ST-T Wave Abnormality", "Left Ventricular Hypertrophy")),
+    slope = factor(slope, levels = c(1, 2, 3), labels = c("Upsloping", "Flat", "Downsloping")),
+    thal = factor(thal, levels = c(3, 6, 7), labels = c("Normal", "Fixed Defect", "Reversible Defect")),
+    num = ifelse(num == 0, "No Disease", "Disease")
+  )
+
+# Display the first few rows of the updated dataset
+head(data)
+
+```
+## Here we are handling missing values
+```{r}
+#DATA CLEANING
+
+# find location of missing values
+print("Position of missing values ")
+which(is.na(data))
+ 
+# count total missing values 
+print("Count of total missing values ")
+sum(is.na(data))
+
+data <- na.omit(data)
+print("Count of total missing values ")
+sum(is.na(data))
+
+```
+
+```{r}
+# separate variables in continuous or categorical
+categorical_v <- c("sex", "cp", "fbs", "restecg", "exang", "slope", "ca", "thal", "num")
+
+continuous_v <- setdiff(names(data), c(categorical_v, "patient_id"))
+
+```
+
+## Create visualizations in order to show which variables seem to be more associated with heart disease
+
+```{r}
+library(ggplot2)
+library(gridExtra)
+library(corrplot)
+
+cat_plots <- lapply(categorical_v, function(var) {
+  ggplot(data, aes_string(var)) +
+    geom_bar(fill = "purple", color="black") +
+    theme_minimal() +
+    ggtitle(paste("Distribution of", var))
+})
+grid.arrange(grobs = cat_plots, ncol = 3)
+
+```
+```{r}
+cont_plots <- lapply(continuous_v, function(var) {
+  ggplot(data, aes_string(var)) +
+    geom_histogram(fill = "pink", color = "black", bins = 30) +
+    theme_minimal() +
+    ggtitle(paste("Distribution of", var))
+})
+grid.arrange(grobs = cont_plots, ncol = 2)
+
+```
+```{r}
+cont_data <- data[, continuous_v]
+cor_matrix <- cor(cont_data, use = "complete.obs")
+# Correlation Heatmap
+corrplot(cor_matrix, method = "color", addCoef.col = "black", 
+         tl.col = "black", tl.srt = 45, title = "Correlation Matrix",
+         mar = c(0, 0, 2, 0))
+```
+
+#exercise induced angina
+#exercise induced angina (1 = yes; 0 = no)
+data$exang
+
+#slope: the slope of the peak exercise ST segment
+#        -- Value 1: upsloping
+#        -- Value 2: flat
+#        -- Value 3: downsloping
+data$slope
+
+#thal 3 = normal; 6 = fixed defect; 7 = reversable defect
+data$thal
+
+#diagnosis of heart disease (angiographic disease status)
+#        -- Value 0: < 50% diameter narrowing
+#        -- Value 1: > 50% diameter narrowing
+data$num
+
+# 2 Difference in mortality rates in hospitalized COVID-19 patients 
+Using the supplementary material from the [Difference in mortality rates in hospitalized COVID-19 patients identified by cytokine profile clustering using a machine learning approach: An outcome prediction alternative](https://www.frontiersin.org/articles/10.3389/fmed.2022.987182/full), perform the following tasks
+
+## Reproduce Figure 1 from the publication
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(RColorBrewer)
+library(readxl)
+library(lubridate)
+
+data1 <- read_excel("Table 1.XLSX")
+data1$`Syntoms onset` <- as.Date(as.numeric(data1$`Syntoms onset`), origin = "1899-12-30")
+data1$`Hospitalization date` <- as.Date(as.numeric(data1$`Hospitalization date`), origin = "1899-12-30")
+data1[] <- lapply(data1, as.character)
+data1[data1 == "NI"] <- NA
+
+```
+
+
+```{r}
+# Clean duplicates
+data1 <- data1 %>% distinct()
+```
+
+```{r}
+# See duplicates by id
+duplicated_ids <- data1 %>%
+  group_by(ID) %>%
+  filter(n() > 1) %>%
+  distinct()
+
+print(duplicated_ids)
+```
+
+
+```{r}
+# Since we do not know which ones are correct and which ones are wrong, we will delete all the rows whose ID is repeated.
+data_cleaned <- data1 %>%
+  group_by(ID) %>%
+  filter(n() == 1) %>%
+  ungroup()
+
+# Confirming the duplicates were deleted
+duplicated_ids <- data_cleaned %>%
+  group_by(ID) %>%
+  filter(n() > 1) %>%
+  distinct()
+
+print(duplicated_ids)
+```
+
+```{r}
+# See duplicates with different ids
+duplicated_ids_diff <- data_cleaned %>%
+  group_by_at(vars(-ID)) %>% 
+  filter(n() > 1) %>% 
+  ungroup()
+
+print(duplicated_ids_diff)
+```
+
+```{r}
+# We will follow the same criteria as before, since we do not know which ones are correct and which ones are wrong, we will delete all the rows whose ID is repeated.
+data_cleaned <- data_cleaned %>%
+  group_by_at(vars(-ID)) %>%
+  filter(n() == 1) %>%
+  ungroup()
+
+# Confirming the duplicates were deleted
+duplicated_ids_diff <- data_cleaned %>%
+  group_by_at(vars(-ID)) %>% 
+  filter(n() > 1) %>% 
+  ungroup()
+
+print(duplicated_ids_diff)
+
+```
+
+```{r}
+# Subset for Figure1A
+unique(data_cleaned$Age)
+data_age <- data_cleaned %>%
+  filter(!is.na(Age)) %>%
+  select(ID, Age)
+data_age$Age <- as.numeric(data_age$Age)
+
+# Subset for Figure1B y Figure1C
+groups_combined_data <- data_cleaned %>%
+  select(ID, `ARDS Diagnosis`, `Days with ARDS`, `Use of NIV`, `Days with NIV`, `Use of AMV`, `Days with AMV`) %>%
+  filter(
+    `ARDS Diagnosis` %in% c("Yes", "No"),
+    !is.na(`Days with ARDS`),
+    `Use of NIV` %in% c("Yes", "No"),
+    !is.na(`Days with NIV`),
+    `Use of AMV` %in% c("Yes", "No"),
+    !is.na(`Days with AMV`)
+  )
+
+# Subset for Figure1D
+unique(data_cleaned$Death)
+# "No"  "Yes" "3"
+Death <- data_cleaned %>% filter(Death %in% c("Yes", "No")) %>% select(ID, Death)
+
+#Subset for Gender for Figure 2.2
+unique(data_cleaned$Gender)
+Gender <- data_cleaned %>%
+  filter(Gender %in% c("M", "F")) %>%
+  select(ID, Gender)
+```
+
+```{r}
+#A
+hist(
+  data_age$Age, 
+  breaks = seq(0, 100, by = 10),
+  col = "azure2",
+  ylim = c(0, 50),
+  xlim = c(20, 100),
+  xlab = "Age (years)",                 
+  ylab = "Frequency (n)",           
+  main = "Age",    
+)
+```
+```{r}
+#B
+classification <- groups_combined_data %>%
+  mutate(
+    Clinical_Classification = case_when(
+      (`ARDS Diagnosis` == "No" & `Use of NIV` == "No" & `Use of AMV` == "No") ~ "G1",
+      (`ARDS Diagnosis` == "No" & `Use of NIV` == "Yes" & `Use of AMV` == "No") ~ "G2",
+      (`ARDS Diagnosis` == "No" & `Use of NIV` == "No" & `Use of AMV` == "Yes") ~ "G2",
+      (`ARDS Diagnosis` == "Yes" & `Use of NIV` == "Yes" & `Use of AMV` == "No") ~ "G3",
+      (`ARDS Diagnosis` == "Yes" & `Use of NIV` == "Yes" & `Use of AMV` == "Yes") ~ "G4",
+      (`ARDS Diagnosis` == "Yes" & `Use of NIV` == "No" & `Use of AMV` == "Yes") ~ "G4",
+      TRUE ~ "Unclassified"
+    )
+  )
+# Filter and print the unclassified rows
+unclassified_rows <- classification %>%
+  filter(Clinical_Classification == "Unclassified")
+
+# Print the unclassified rows
+print(unclassified_rows)
+
+classification_table <- classification %>%
+  distinct(Clinical_Classification) %>%
+  filter(!is.na(Clinical_Classification) & Clinical_Classification != "Unclassified") %>%
+  mutate(
+    Clinical_Classification = Clinical_Classification,
+    NIV = case_when(
+      Clinical_Classification == "G1" ~ "-",
+      Clinical_Classification %in% c("G2", "G4") ~ "-/+",
+      Clinical_Classification == "G3" ~ "+"
+    ),
+    AMV = case_when(
+      Clinical_Classification == "G1" ~ "-",
+      Clinical_Classification == "G2" ~ "+/-",
+      Clinical_Classification == "G3" ~ "-",
+      Clinical_Classification == "G4" ~ "+"
+    ),
+    ARDS = case_when(
+      Clinical_Classification %in% c("G1", "G2") ~ "-",
+      Clinical_Classification %in% c("G3", "G4") ~ "+"
+    )
+  )%>%
+  arrange(factor(Clinical_Classification, levels = c("G1", "G2", "G3", "G4")))
+
+print(classification_table)
+```
+```{r}
+#C
+classification_summary <- classification %>%
+  filter(!is.na(Clinical_Classification) & Clinical_Classification != "Unclassified") %>% 
+  count(Clinical_Classification) %>%  
+  mutate(Clinical_Classification = factor(Clinical_Classification, levels = c("G1", "G2", "G3", "G4")))
+
+ggplot(classification_summary, aes(x = Clinical_Classification, y = n, fill = Clinical_Classification)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = n), vjust = -0.3, size = 4) +
+  labs(
+    x = "Clinical classification",
+    y = "Frequency (n)",
+    title = "Clinical Classification",
+    fill = "Clinical Classification"
+  ) +
+  expand_limits(y = max(classification_summary$n) * 1.1) + 
+  theme_minimal() +
+  scale_fill_brewer(palette = "Set3") +
+  theme(legend.position = "none")
+
+```
+
+```{r}
+#D
+vital_status <- Death %>% count(Death)
+
+ggplot(vital_status, aes(x = Death, y = n, fill = Death)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = n), vjust = -0.3, size = 4) +
+  labs(
+    x = "Death",
+    y = "Frequency (n)",
+    title = "Vital Status"
+  ) +
+  expand_limits(y = max(vital_status$n) * 1.1) + 
+  theme_minimal()
+
+```
+
+
+Since we do not have detailed information about the data cleaning and preprocessing steps used in the supplementary data provided in the article, some of the reproduced figures contain a different number of patients. However, despite these differences, most of the figures generated in this section closely resemble those presented in the paper.
+
+## Reproduce Figure 2 from the publication but instead of representing the clusters in the annotation, represent the groups (G1 to G4)
+
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(reshape2)
+library(pheatmap)
+library(dplyr)
+library(readxl)
+library(tibble)
+library(RColorBrewer)
+library(scales)
+```
+
+
+```{r}
+# Read the dataset
+data2 <- read_excel("Table 2.XLSX", skip=1)
+# Assign the colnames
+colnames(data2) <- c("ID", "Day", "IL-1β", "IL-6", "IL-10", "IFN-ɑ", "TNF-ɑ", "IL-8", "G-CSF", 
+                     "IFN-γ", "CCL3", "CXCL10", "CCL2", "IL-38", "PT", "TTP", "D-Dimer", "Fibrinogen", 
+                  "CRP", "Procalcitonin", "Ferritin", "Hemoglobin (g/dL)", "Platelets (units/µl)", 
+                  "Leucocytes (units/mm^3)", "Lymphocytes (units/mm^3)","Neutrophils (units/mm^3)",	"Eritrocytes (millions/microliter)")
+
+```
+
+```{r}
+# Fill missing IDs: Assign missing IDs with the last available value
+data2$ID <- zoo::na.locf(data2$ID) 
+```
+
+```{r}
+# Select only required columns
+selected_columns <- c("ID", "IL-1β", "IL-6", "IL-10", "IFN-ɑ", "TNF-ɑ", "IL-8", "G-CSF", 
+                      "IFN-γ", "CCL3", "CXCL10", "CCL2", "IL-38")
+
+data2_subset <- data2 %>% select(all_of(selected_columns))
+
+# Ensure that all numeric columns are properly converted
+numeric_columns <- setdiff(selected_columns, "ID")  # Exclude ID
+data2_subset[numeric_columns] <- lapply(data2_subset[numeric_columns], as.numeric)
+
+# Remove rows with any missing values
+data2_subset <- na.omit(data2_subset)
+
+# Compute the average of duplicate IDs and approximate to 6 decimals
+data2_avg <- data2_subset %>%
+  group_by(ID) %>%
+  summarise(across(where(is.numeric), \(x) round(mean(x, na.rm = TRUE), 6))) %>%
+  ungroup()
+```
+
+```{r}
+# See duplicates by ID
+duplicated_ids <- data2_avg %>%
+  group_by(ID) %>%
+  filter(n() > 1) %>%
+  distinct()
+
+print(duplicated_ids) # There is no duplicate with the same ID
+```
+
+```{r}
+# See duplicates with different IDs
+duplicated_ids_diff <- data2_avg %>%
+  group_by_at(vars(-ID)) %>% 
+  filter(n() > 1) %>% 
+  ungroup()
+
+print(duplicated_ids_diff) # There is no duplicate with the different ID
+```
+
+```{r}
+# Check mismatched IDs before merging
+missing_in_classification <- setdiff(data2_avg$ID, classification$ID)
+missing_in_avg <- setdiff(classification$ID, data2_avg$ID)
+```
+
+```{r}
+cat("IDs in data2_avg but missing in classification:", length(missing_in_classification), "\n") # There are 20 IDs in data2 but not in classification
+```
+
+
+```{r}
+cat("IDs in classification but missing in data2_avg:", length(missing_in_avg), "\n") # There are 40 IDs in classification but not in data2
+```
+
+
+```{r, fig.width=10, fig.height=6}
+# Merge cytokine data with classification labels
+final_data <- data2_avg %>%
+  left_join(classification %>% select(ID, Clinical_Classification), by = "ID") %>%
+  filter(!is.na(Clinical_Classification))  # Ensure all samples have a classification
+
+# Select only relevant columns (ID, biomarkers, classification)
+final_data <- final_data %>%
+  select(ID, everything(), Clinical_Classification)
+
+# Convert classification labels into an ordered factor
+final_data$Clinical_Classification <- factor(final_data$Clinical_Classification, 
+                                             levels = c("G1", "G2", "G3", "G4", "Unclassified"))
+
+# Prepare annotation data before removing ID column
+annotation_col <- final_data %>%
+  select(ID, Clinical_Classification) %>%
+  column_to_rownames(var = "ID")  # Set sample ID as row names
+
+# Convert biomarker columns to numeric format
+biomarker_columns <- setdiff(colnames(final_data), c("ID", "Clinical_Classification"))
+final_data[biomarker_columns] <- lapply(final_data[biomarker_columns], as.numeric)
+
+# Ensure all values are numeric
+if (any(sapply(final_data[biomarker_columns], function(x) !is.numeric(x)))) {
+  stop("Error: Some columns in final_data are not numeric. Please check the dataset.")
+}
+
+# Normalize biomarker values to a 0% - 100% scale
+final_data[biomarker_columns] <- lapply(final_data[biomarker_columns], function(x) rescale(x, to = c(0, 100)))
+
+# Set sample ID as row names for the heatmap and remove classification from data matrix
+heatmap_data <- final_data %>%
+  column_to_rownames(var = "ID") %>%
+  select(-Clinical_Classification)  
+
+# Convert data to matrix format for heatmap generation
+heatmap_data <- as.matrix(heatmap_data)
+
+# Order samples by classification group
+row_order <- order(annotation_col$Clinical_Classification)
+heatmap_data <- heatmap_data[row_order, ]  
+annotation_col <- annotation_col[row_order, , drop = FALSE]  
+
+# Define classification colors, including Unclassified
+annotation_colors <- list(
+  Clinical_Classification = c(G1 = "green", G2 = "#3282B8", G3 = "salmon", G4 = "yellow", Unclassified = "grey")
+)
+
+# Define heatmap color scale 
+color_palette <- colorRampPalette(c("#F6E8C3", "#D73027"))(50)
+
+# Transpose matrix for vertical orientation
+heatmap_data <- t(heatmap_data)
+
+# Generate the heatmap with classification annotations
+pheatmap(
+  heatmap_data,
+  cluster_rows = FALSE,  # Disable row clustering for manual grouping
+  cluster_cols = FALSE,  # Keep samples in predefined order
+  scale = "none",        # Use original rescaled values (0% - 100%)
+  annotation_col = annotation_col,  
+  annotation_colors = annotation_colors,  
+  annotation_names_col = FALSE,  # Display classification labels in the legend
+  show_rownames = TRUE,  # Display biomarker names on the y-axis
+  show_colnames = FALSE, # Hide individual sample IDs for clarity
+  main = "Cytokine Levels by Classification",
+  color = color_palette,  
+  legend = TRUE,  # Include classification legend
+  fontsize = 12,  # Adjust text size for readability
+  border_color = NA,  # Remove grid borders
+  labels_col = "Patients",  # Label x-axis as "Patients"
+)
+
+```
+The heatmap shows cytokine expression levels across different clinical classifications (G1-G4 and Unclassified) based on ARDS diagnosis and respiratory support requirements (NIV and AMV usage). G1 represents patients without ARDS who did not require respiratory support, whereas G2 includes those without ARDS but needing either NIV or AMV. G3 consists of ARDS patients requiring NIV without AMV, and G4 represents the most severe cases, requiring both NIV and AMV. The Unclassified category includes cases that do not fit these predefined classifications. The heatmap reveals a trend where G3 and G4 patients exhibit higher cytokine levels, particularly in IL-1β, CXCL10, and CCL2, suggesting an elevated inflammatory response. G1 and G2 show lower cytokine expression, indicating a less pronounced immune activation. Meanwhile, the Unclassified group presents a heterogeneous expression pattern. These results suggest the need of further characterization and classification in order to find more correlations.
+
+## Improve figure 2 of the publication Add a second annotation with information of deathm and a third one with information of gender
+
+```{r, fig.width=10, fig.height=6}
+# Merge cytokine data with classification, death, and gender labels
+final_data <- data2_avg %>%
+  left_join(classification %>% select(ID, Clinical_Classification), by = "ID") %>%
+  left_join(Death, by = "ID") %>%
+  left_join(Gender, by = "ID") %>%
+  filter(!is.na(Clinical_Classification) & !is.na(Death) & !is.na(Gender))  # Remove rows with missing values
+
+# Convert classification, death, and gender into factors
+final_data$Clinical_Classification <- factor(final_data$Clinical_Classification, 
+                                             levels = c("G1", "G2", "G3", "G4", "Unclassified"))
+
+final_data$Death <- factor(final_data$Death, levels = c("No", "Yes"))
+final_data$Gender <- factor(final_data$Gender, levels = c("M", "F"))
+
+# Prepare annotation data before removing ID column
+annotation_col <- final_data %>%
+  select(ID, Clinical_Classification, Death, Gender) %>%
+  column_to_rownames(var = "ID")  # Set sample ID as row names
+
+# Convert biomarker columns to numeric format
+biomarker_columns <- setdiff(colnames(final_data), c("ID", "Clinical_Classification", "Death", "Gender"))
+final_data[biomarker_columns] <- lapply(final_data[biomarker_columns], as.numeric)
+
+# Normalize biomarker values to a 0% - 100% scale
+final_data[biomarker_columns] <- lapply(final_data[biomarker_columns], function(x) rescale(x, to = c(0, 100)))
+
+# Set sample ID as row names for the heatmap
+heatmap_data <- final_data %>%
+  column_to_rownames(var = "ID") %>%
+  select(-Clinical_Classification, -Death, -Gender)  
+
+# Convert data to matrix format for heatmap generation
+heatmap_data <- as.matrix(heatmap_data)
+
+# Order samples by classification group
+row_order <- order(annotation_col$Clinical_Classification)
+heatmap_data <- heatmap_data[row_order, ]  
+annotation_col <- annotation_col[row_order, , drop = FALSE]  
+
+# Define classification, death, and gender colors
+annotation_colors <- list(
+  Clinical_Classification = c(G1 = "green", G2 = "#3282B8", G3 = "salmon", G4 = "yellow", Unclassified = "grey"),
+  Death = c(Yes = "black", No = "white"),  # Death annotation (Black = Died, White = Survived)
+  Gender = c(M = "#6495ED", F = "#FF69B4")  # Gender annotation (Blue = Male, Pink = Female)
+)
+
+# Define heatmap color scale
+color_palette <- colorRampPalette(c("#F6E8C3", "#D73027"))(50)
+
+# Transpose matrix for vertical orientation
+heatmap_data <- t(heatmap_data)
+
+# Generate the heatmap with classification, death, and gender annotations
+pheatmap(
+  heatmap_data,
+  cluster_rows = FALSE,  # Disable row clustering for manual grouping
+  cluster_cols = FALSE,  # Keep samples in predefined order
+  scale = "none",        # Use original rescaled values (0% - 100%)
+  annotation_col = annotation_col,  
+  annotation_colors = annotation_colors,  
+  annotation_names_col = FALSE,  # Display classification, death, and gender labels in legend
+  show_rownames = TRUE,  # Display biomarker names on the y-axis
+  show_colnames = FALSE, # Hide individual sample IDs for clarity
+  main = "Cytokine Levels by Classification",
+  color = color_palette,  
+  legend = TRUE,  # Include classification legend
+  fontsize = 12,  # Adjust text size for readability
+  border_color = NA,  # Remove grid borders
+  labels_col = "Patients"  # Label x-axis as "Patients"
+)
+
+
+```
+In this version of the heatmap, the topmost bar represents gender (M = Male, F = Female), while the second bar indicates death status (black = deceased, white = survived). The classification groups (G1-G4 and Unclassified) remain unchanged, allowing for a clearer comparison of cytokine expression in relation to these factors.
+
+Deceased patients are more frequent in G3 and G4, suggesting higher mortality among ARDS patients requiring respiratory support. In contrast, G1 and G2, associated with lower cytokine levels and less severe conditions, show a lower proportion of deaths. Cytokines like IL-1β, CXCL10, and CCL2 remain highly expressed in G3 and G4, further supporting their role in severe inflammation. Gender distribution seems to be balanced across all groups, with no immediate correlation to cytokine expression.
+
+# session info {.unnumbered}
+
+```{r, results='asis',  echo=FALSE, message=FALSE }
+
+sessionInfo()
+```
