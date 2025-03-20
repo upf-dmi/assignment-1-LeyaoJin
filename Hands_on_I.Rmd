@@ -111,6 +111,7 @@ corrplot(cor_matrix, method = "color", addCoef.col = "black",
          mar = c(0, 0, 2, 0))
 ```
 
+```{r}
 #exercise induced angina
 #exercise induced angina (1 = yes; 0 = no)
 data$exang
@@ -128,6 +129,7 @@ data$thal
 #        -- Value 0: < 50% diameter narrowing
 #        -- Value 1: > 50% diameter narrowing
 data$num
+```
 
 # 2 Difference in mortality rates in hospitalized COVID-19 patients 
 Using the supplementary material from the [Difference in mortality rates in hospitalized COVID-19 patients identified by cytokine profile clustering using a machine learning approach: An outcome prediction alternative](https://www.frontiersin.org/articles/10.3389/fmed.2022.987182/full), perform the following tasks
